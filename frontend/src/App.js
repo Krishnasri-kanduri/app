@@ -24,11 +24,18 @@ function App() {
   const [userStats, setUserStats] = useState(null);
   const [latestNews, setLatestNews] = useState([]);
   const [activeTab, setActiveTab] = useState("research");
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // Initialize user on component mount
   useEffect(() => {
-    initializeUser();
-    fetchLatestNews();
+    const initialize = async () => {
+      await Promise.all([
+        initializeUser(),
+        fetchLatestNews()
+      ]);
+      setIsInitializing(false);
+    };
+    initialize();
   }, []);
 
   // Fetch user stats when user is set
