@@ -305,12 +305,19 @@ async def get_research_status(question_id: str):
     if not question:
         raise HTTPException(status_code=404, detail="Research question not found")
     
+    # Remove MongoDB ObjectId before serialization
+    if "_id" in question:
+        del question["_id"]
+    
     result = {"status": question["status"]}
     
     if question["status"] == "completed":
         report = await db.research_reports.find_one({"question_id": question_id})
         if report:
-            result["report"] = report
+            # Remove MongoDB ObjectId before serialization
+            if "_id" in report:
+                del report["_id"]
+            result["report"] = ResearchReport(**report)
     
     return result
 
