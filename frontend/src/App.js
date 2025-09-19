@@ -230,12 +230,32 @@ function App() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  if (!currentUser) {
+  if (isInitializing) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
-          <p className="text-lg text-gray-600">Initializing Smart Research Assistant...</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-teal-50">
+        <header className="bg-white/80 backdrop-blur-md border-b border-emerald-100">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center py-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+                  <Brain className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                    Smart Research Assistant
+                  </h1>
+                  <p className="text-sm text-gray-600">AI-powered research with live data</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+            <p className="text-lg text-gray-600">Loading Smart Research Assistant...</p>
+            <p className="text-sm text-gray-500 mt-2">Setting up your research workspace</p>
+          </div>
         </div>
       </div>
     );
