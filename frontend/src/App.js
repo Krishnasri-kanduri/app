@@ -24,11 +24,18 @@ function App() {
   const [userStats, setUserStats] = useState(null);
   const [latestNews, setLatestNews] = useState([]);
   const [activeTab, setActiveTab] = useState("research");
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // Initialize user on component mount
   useEffect(() => {
-    initializeUser();
-    fetchLatestNews();
+    const initialize = async () => {
+      await Promise.all([
+        initializeUser(),
+        fetchLatestNews()
+      ]);
+      setIsInitializing(false);
+    };
+    initialize();
   }, []);
 
   // Fetch user stats when user is set
@@ -41,14 +48,34 @@ function App() {
 
   const initializeUser = async () => {
     try {
-      // For demo purposes, create a default user
+      // Check if user already exists in localStorage
+      const savedUser = localStorage.getItem('researchAssistantUser');
+      
+      if (savedUser) {
+        const user = JSON.parse(savedUser);
+        // Verify user still exists in backend
+        try {
+          const response = await axios.get(`${API}/users/${user.id}`);
+          setCurrentUser(response.data);
+          console.log("Existing user loaded from localStorage");
+          return;
+        } catch (error) {
+          // User doesn't exist in backend anymore, create new one
+          localStorage.removeItem('researchAssistantUser');
+        }
+      }
+      
+      // Create new user only if no valid user exists
       const userData = {
         name: "Research User",
-        email: "user@example.com"
+        email: `user_${Date.now()}@example.com`
       };
       
       const response = await axios.post(`${API}/users`, userData);
       setCurrentUser(response.data);
+      
+      // Save user to localStorage for future visits
+      localStorage.setItem('researchAssistantUser', JSON.stringify(response.data));
       toast.success("Welcome to Smart Research Assistant!");
     } catch (error) {
       console.error("User initialization failed:", error);
@@ -203,12 +230,32 @@ function App() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  if (!currentUser) {
+  if (isInitializing) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
-          <p className="text-lg text-gray-600">Initializing Smart Research Assistant...</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-teal-50">
+        <header className="bg-white/80 backdrop-blur-md border-b border-emerald-100">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center py-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+                  <Brain className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                    Smart Research Assistant
+                  </h1>
+                  <p className="text-sm text-gray-600">AI-powered research with live data</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+            <p className="text-lg text-gray-600">Loading Smart Research Assistant...</p>
+            <p className="text-sm text-gray-500 mt-2">Setting up your research workspace</p>
+          </div>
         </div>
       </div>
     );
@@ -234,7 +281,7 @@ function App() {
               </div>
             </div>
             
-            {userStats && (
+            {userStats ? (
               <div className="flex items-center space-x-4">
                 <div className="text-right">
                   <p className="text-sm text-gray-600">Credits</p>
@@ -242,6 +289,16 @@ function App() {
                 </div>
                 <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
                   {userStats.reports_generated} Reports
+                </Badge>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-4">
+                <div className="text-right">
+                  <p className="text-sm text-gray-600">Credits</p>
+                  <p className="text-lg font-semibold text-emerald-600">100</p>
+                </div>
+                <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
+                  0 Reports
                 </Badge>
               </div>
             )}
