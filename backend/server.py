@@ -367,6 +367,10 @@ async def get_user_stats(user_id: str):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Remove MongoDB ObjectId before using
+    if "_id" in user:
+        del user["_id"]
+    
     total_questions = await db.research_questions.count_documents({"user_id": user_id})
     completed_reports = await db.research_reports.count_documents({"user_id": user_id})
     
