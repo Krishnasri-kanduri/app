@@ -41,14 +41,34 @@ function App() {
 
   const initializeUser = async () => {
     try {
-      // For demo purposes, create a default user
+      // Check if user already exists in localStorage
+      const savedUser = localStorage.getItem('researchAssistantUser');
+      
+      if (savedUser) {
+        const user = JSON.parse(savedUser);
+        // Verify user still exists in backend
+        try {
+          const response = await axios.get(`${API}/users/${user.id}`);
+          setCurrentUser(response.data);
+          console.log("Existing user loaded from localStorage");
+          return;
+        } catch (error) {
+          // User doesn't exist in backend anymore, create new one
+          localStorage.removeItem('researchAssistantUser');
+        }
+      }
+      
+      // Create new user only if no valid user exists
       const userData = {
         name: "Research User",
-        email: "user@example.com"
+        email: `user_${Date.now()}@example.com`
       };
       
       const response = await axios.post(`${API}/users`, userData);
       setCurrentUser(response.data);
+      
+      // Save user to localStorage for future visits
+      localStorage.setItem('researchAssistantUser', JSON.stringify(response.data));
       toast.success("Welcome to Smart Research Assistant!");
     } catch (error) {
       console.error("User initialization failed:", error);
