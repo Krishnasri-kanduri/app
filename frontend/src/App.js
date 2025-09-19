@@ -281,7 +281,7 @@ function App() {
               </div>
             </div>
             
-            {userStats && (
+            {userStats ? (
               <div className="flex items-center space-x-4">
                 <div className="text-right">
                   <p className="text-sm text-gray-600">Credits</p>
@@ -289,6 +289,16 @@ function App() {
                 </div>
                 <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
                   {userStats.reports_generated} Reports
+                </Badge>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-4">
+                <div className="text-right">
+                  <p className="text-sm text-gray-600">Credits</p>
+                  <p className="text-lg font-semibold text-emerald-600">100</p>
+                </div>
+                <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
+                  0 Reports
                 </Badge>
               </div>
             )}
