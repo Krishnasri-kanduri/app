@@ -326,6 +326,15 @@ async def get_user_reports(user_id: str):
     reports = await db.research_reports.find({"user_id": user_id}).to_list(100)
     questions = await db.research_questions.find({"user_id": user_id}).to_list(100)
     
+    # Remove MongoDB ObjectIds before serialization
+    for report in reports:
+        if "_id" in report:
+            del report["_id"]
+    
+    for question in questions:
+        if "_id" in question:
+            del question["_id"]
+    
     # Combine reports with questions
     combined_reports = []
     for report in reports:
