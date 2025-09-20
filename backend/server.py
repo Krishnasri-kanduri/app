@@ -199,10 +199,8 @@ MOCK_NEWS = [
 
 # Initialize Gemini chat
 async def get_gemini_chat():
-    return LlmChat(
-        api_key=os.environ.get('EMERGENT_LLM_KEY'),
-        session_id="research-assistant",
-        system_message="""You are a Smart Research Assistant. Your role is to:
+    api_key = os.environ.get('EMERGENT_LLM_KEY')
+    system_message = """You are a Smart Research Assistant. Your role is to:
 1. Analyze uploaded files and live data sources
 2. Generate concise, evidence-based research reports (2-3 paragraphs)
 3. Always include specific citations and sources
@@ -213,7 +211,15 @@ Format your responses as structured reports with:
 - Key Findings (main insights)
 - Supporting Evidence (with citations)
 - Sources Used (list all sources referenced)"""
-    ).with_model("gemini", "gemini-2.0-flash")
+    if HAS_EI:
+        return LlmChat(
+            api_key=api_key,
+            session_id="research-assistant",
+            system_message=system_message
+        ).with_model("gemini", "gemini-2.0-flash")
+    else:
+        # Use lightweight fallback that talks to Gemini via google-generativeai
+        return FallbackChat(api_key=api_key, session_id="research-assistant", system_message=system_message)
 
 # Routes
 
