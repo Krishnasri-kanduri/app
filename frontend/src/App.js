@@ -148,7 +148,7 @@ function App() {
         toast.success("Account created successfully!");
       } else {
         // Login user
-        response = await axios.post(`${API}/auth/login`, {
+        response = await axios.post(`auth/login`, {
           email: authForm.email,
           password: authForm.password
         });
