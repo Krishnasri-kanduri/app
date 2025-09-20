@@ -131,15 +131,17 @@ function App() {
       const response = await axios.get(`stats/${currentUser.id}`);
       setUserStats(response.data);
     } catch (error) {
-      console.error("Failed to fetch user stats:", error);
-      if (isNetworkError(error)) {
-        // Fallback to safe defaults
+      const isNet = isNetworkError(error);
+      if (isNet) {
+        // Fallback to safe defaults (suppress console error noise)
         setUserStats({
           credits_remaining: currentUser?.credits ?? 100,
           total_questions_asked: 0,
           reports_generated: 0,
           credits_used: 0
         });
+      } else {
+        console.error("Failed to fetch user stats:", error);
       }
     }
   };
@@ -157,9 +159,12 @@ function App() {
       const response = await axios.get(`reports/${currentUser.id}`);
       setReports(response.data);
     } catch (error) {
-      console.error("Failed to fetch reports:", error);
-      if (isNetworkError(error)) {
+      const isNet = isNetworkError(error);
+      if (isNet) {
+        // Suppress console error noise in offline mode
         setReports([]);
+      } else {
+        console.error("Failed to fetch reports:", error);
       }
     }
   };
@@ -171,7 +176,6 @@ function App() {
       const response = await axios.get(`news`);
       setLatestNews(response.data);
     } catch (error) {
-      console.error("Failed to fetch news:", error);
       if (isNetworkError(error)) {
         // Fallback to built-in mock news so the UI still has content when backend is unreachable
         const fallbackNews = [
@@ -214,7 +218,6 @@ function App() {
         toast.success(`File "${file.name}" uploaded successfully!`);
       } catch (error) {
         const isNetworkError = (err) => err && err.isAxiosError && !err.response;
-        console.error("File upload failed:", error);
         if (isNetworkError(error)) {
           const localId = `local-file-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
           setUploadedFiles(prev => [...prev, {
@@ -222,9 +225,10 @@ function App() {
             name: file.name,
             size: file.size
           }]);
-          toast.success(`Added "${file.name}" (local only)`);
+          toast.success(`Added \"${file.name}\" (local only)`);
         } else {
-          toast.error(`Failed to upload "${file.name}"`);
+          console.error("File upload failed:", error);
+          toast.error(`Failed to upload \"${file.name}\"`);
         }
       }
     }
