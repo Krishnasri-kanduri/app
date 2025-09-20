@@ -51,36 +51,62 @@ function App() {
   }, [currentUser]);
 
   const initializeUser = async () => {
+    const isNetworkError = (err) => err && err.isAxiosError && !err.response;
+
     try {
       // Check if user already exists in localStorage
       const savedUser = localStorage.getItem('researchAssistantUser');
-      
+
       if (savedUser) {
         const user = JSON.parse(savedUser);
         // Verify user still exists in backend
         try {
-          const response = await axios.get(`${API}/users/${user.id}`);
+          const response = await axios.get(`/users/${user.id}`);
           setCurrentUser(response.data);
           console.log("Existing user loaded from localStorage");
           return;
         } catch (error) {
-          // User doesn't exist in backend anymore, create new one
+          // If network error, fall back to local user
+          if (isNetworkError(error)) {
+            console.warn("Backend unreachable, using local cached user");
+            setCurrentUser(user);
+            return;
+          }
+          // User doesn't exist in backend anymore, create new one locally
           localStorage.removeItem('researchAssistantUser');
         }
       }
-      
+
       // Create new user only if no valid user exists
       const userData = {
         name: "Research User",
         email: `user_${Date.now()}@example.com`
       };
-      
-      const response = await axios.post(`${API}/users`, userData);
-      setCurrentUser(response.data);
-      
-      // Save user to localStorage for future visits
-      localStorage.setItem('researchAssistantUser', JSON.stringify(response.data));
-      toast.success("Welcome to Smart Research Assistant!");
+
+      try {
+        const response = await axios.post(`/users`, userData);
+        setCurrentUser(response.data);
+        localStorage.setItem('researchAssistantUser', JSON.stringify(response.data));
+        toast.success("Welcome to Smart Research Assistant!");
+        return;
+      } catch (error) {
+        // Network fallback: create a local ephemeral user so app remains usable offline
+        if (isNetworkError(error)) {
+          const localUser = {
+            id: `local-${Date.now()}`,
+            name: userData.name,
+            email: userData.email,
+            credits: 100,
+            created_at: new Date().toISOString()
+          };
+          console.warn('Backend unreachable, created local fallback user', localUser);
+          setCurrentUser(localUser);
+          localStorage.setItem('researchAssistantUser', JSON.stringify(localUser));
+          toast.success("Running in offline mode: local user created");
+          return;
+        }
+        throw error;
+      }
     } catch (error) {
       console.error("User initialization failed:", error);
       toast.error("Failed to initialize user");
