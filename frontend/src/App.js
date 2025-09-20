@@ -12,8 +12,9 @@ import { Upload, FileText, Brain, TrendingUp, Search, Zap, Target } from "lucide
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
+// Use explicit relative API root when no backend URL provided (works in dev with proxy or production when served together)
+const API = BACKEND_URL ? `${BACKEND_URL.replace(/\/$/, "")}/api` : "/api";
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
