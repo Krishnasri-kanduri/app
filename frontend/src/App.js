@@ -119,11 +119,7 @@ function App() {
         const formData = new FormData();
         formData.append('file', file);
         
-        const response = await axios.post(`${API}/upload`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
+        const response = await axios.post(`${API}/upload`, formData);
         
         setUploadedFiles(prev => [...prev, {
           id: response.data.file_id,
@@ -167,11 +163,7 @@ function App() {
       formData.append('question', question);
       formData.append('file_ids', JSON.stringify(uploadedFiles.map(f => f.id)));
 
-      const response = await axios.post(`${API}/research`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const response = await axios.post(`${API}/research`, formData);
 
       const questionId = response.data.question_id;
       toast.success("Research question submitted! Processing...");
