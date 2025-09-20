@@ -8,7 +8,7 @@ import { Textarea } from "./components/ui/textarea";
 import { Badge } from "./components/ui/badge";
 import { Progress } from "./components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { Upload, FileText, Brain, TrendingUp, Search, Zap, Target } from "lucide-react";
+import { Upload, FileText, Brain, TrendingUp, Search, Zap, Target, UserPlus, LogIn, LogOut, User } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 
@@ -29,12 +29,19 @@ function App() {
   const [latestNews, setLatestNews] = useState([]);
   const [activeTab, setActiveTab] = useState("research");
   const [isInitializing, setIsInitializing] = useState(true);
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState("login"); // "login" or "signup"
+  const [authForm, setAuthForm] = useState({
+    name: "",
+    email: "",
+    password: ""
+  });
 
   // Initialize user on component mount
   useEffect(() => {
     const initialize = async () => {
       await Promise.all([
-        initializeUser(),
+        checkAuthStatus(),
         fetchLatestNews()
       ]);
       setIsInitializing(false);
@@ -50,11 +57,10 @@ function App() {
     }
   }, [currentUser]);
 
-  const initializeUser = async () => {
+  const checkAuthStatus = async () => {
     const isNetworkError = (err) => err && err.isAxiosError && !err.response;
 
     try {
-      // Check if user already exists in localStorage
       const savedUser = localStorage.getItem('researchAssistantUser');
 
       if (savedUser) {
@@ -63,7 +69,7 @@ function App() {
         try {
           const response = await axios.get(`users/${user.id}`);
           setCurrentUser(response.data);
-          console.log("Existing user loaded from localStorage");
+          console.log("User authenticated successfully");
           return;
         } catch (error) {
           // If network error, fall back to local user
@@ -72,7 +78,7 @@ function App() {
             setCurrentUser(user);
             return;
           }
-          // User doesn't exist in backend anymore, create new one locally
+          // User doesn't exist in backend anymore
           localStorage.removeItem('researchAssistantUser');
         }
       }
@@ -105,12 +111,73 @@ function App() {
           toast.success("Running in offline mode: local user created");
           return;
         }
-        throw error;
+        // If non-network error, show auth modal
+        setShowAuth(true);
       }
     } catch (error) {
-      console.error("User initialization failed:", error);
-      toast.error("Failed to initialize user");
+      console.error("Auth check failed:", error);
+      setShowAuth(true);
     }
+  };
+
+  const handleAuthSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (authMode === "signup") {
+      if (!authForm.name || !authForm.email || !authForm.password) {
+        toast.error("Please fill in all fields");
+        return;
+      }
+    } else {
+      if (!authForm.email || !authForm.password) {
+        toast.error("Please enter email and password");
+        return;
+      }
+    }
+
+    try {
+      let response;
+      
+      if (authMode === "signup") {
+        // Create new user
+        response = await axios.post(`${API}/auth/signup`, {
+          name: authForm.name,
+          email: authForm.email,
+          password: authForm.password
+        });
+        toast.success("Account created successfully!");
+      } else {
+        // Login user
+        response = await axios.post(`${API}/auth/login`, {
+          email: authForm.email,
+          password: authForm.password
+        });
+        toast.success("Welcome back!");
+      }
+
+      setCurrentUser(response.data.user);
+      localStorage.setItem('researchAssistantUser', JSON.stringify(response.data.user));
+      setShowAuth(false);
+      setAuthForm({ name: "", email: "", password: "" });
+      
+    } catch (error) {
+      console.error("Auth failed:", error);
+      if (error.response?.data?.detail) {
+        toast.error(error.response.data.detail);
+      } else {
+        toast.error(authMode === "signup" ? "Signup failed" : "Login failed");
+      }
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setUserStats(null);
+    setReports([]);
+    setUploadedFiles([]);
+    localStorage.removeItem('researchAssistantUser');
+    setShowAuth(true);
+    toast.success("Logged out successfully");
   };
 
   const fetchUserStats = async () => {
@@ -245,7 +312,7 @@ function App() {
     }
 
     if (!currentUser) {
-      toast.error("User not initialized");
+      toast.error("Please log in to submit questions");
       return;
     }
 
@@ -380,6 +447,7 @@ function App() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // Auth Screen
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-teal-50">
@@ -411,6 +479,120 @@ function App() {
     );
   }
 
+  if (showAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-teal-50">
+        <Toaster position="top-right" />
+        
+        <header className="bg-white/80 backdrop-blur-md border-b border-emerald-100">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center py-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+                  <Brain className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                    Smart Research Assistant
+                  </h1>
+                  <p className="text-sm text-gray-600">AI-powered research with live data</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex items-center justify-center min-h-[80vh] px-4">
+          <Card className="w-full max-w-md bg-white/80 backdrop-blur-sm border-emerald-100">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl flex items-center justify-center space-x-2">
+                {authMode === "signup" ? <UserPlus className="w-6 h-6 text-emerald-600" /> : <LogIn className="w-6 h-6 text-emerald-600" />}
+                <span>{authMode === "signup" ? "Create Account" : "Welcome Back"}</span>
+              </CardTitle>
+              <CardDescription>
+                {authMode === "signup" 
+                  ? "Start your research journey with 100 free credits" 
+                  : "Sign in to access your research reports and credits"
+                }
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleAuthSubmit} className="space-y-4">
+                {authMode === "signup" && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                    <Input
+                      type="text"
+                      placeholder="Enter your full name"
+                      value={authForm.name}
+                      onChange={(e) => setAuthForm({...authForm, name: e.target.value})}
+                      className="bg-white/70"
+                    />
+                  </div>
+                )}
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                  <Input
+                    type="email"
+                    placeholder="Enter your email"
+                    value={authForm.email}
+                    onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
+                    className="bg-white/70"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                  <Input
+                    type="password"
+                    placeholder="Enter your password"
+                    value={authForm.password}
+                    onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
+                    className="bg-white/70"
+                  />
+                </div>
+
+                <Button 
+                  type="submit" 
+                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700"
+                >
+                  {authMode === "signup" ? (
+                    <>
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Create Account & Get 100 Credits
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="w-4 h-4 mr-2" />
+                      Sign In
+                    </>
+                  )}
+                </Button>
+              </form>
+
+              <div className="mt-6 text-center">
+                <p className="text-sm text-gray-600">
+                  {authMode === "signup" ? "Already have an account?" : "Don't have an account?"}
+                </p>
+                <Button
+                  variant="link"
+                  onClick={() => {
+                    setAuthMode(authMode === "signup" ? "login" : "signup");
+                    setAuthForm({ name: "", email: "", password: "" });
+                  }}
+                  className="text-emerald-600 hover:text-emerald-700"
+                >
+                  {authMode === "signup" ? "Sign In" : "Create Account"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-teal-50">
       <Toaster position="top-right" />
@@ -431,27 +613,44 @@ function App() {
               </div>
             </div>
             
-            {userStats ? (
-              <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">Credits</p>
-                  <p className="text-lg font-semibold text-emerald-600">{userStats.credits_remaining}</p>
+            <div className="flex items-center space-x-4">
+              {userStats ? (
+                <div className="flex items-center space-x-4">
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600">Credits</p>
+                    <p className="text-lg font-semibold text-emerald-600">{userStats.credits_remaining}</p>
+                  </div>
+                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
+                    {userStats.reports_generated} Reports
+                  </Badge>
                 </div>
-                <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
-                  {userStats.reports_generated} Reports
-                </Badge>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">Credits</p>
-                  <p className="text-lg font-semibold text-emerald-600">100</p>
+              ) : (
+                <div className="flex items-center space-x-4">
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600">Credits</p>
+                    <p className="text-lg font-semibold text-emerald-600">100</p>
+                  </div>
+                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
+                    0 Reports
+                  </Badge>
                 </div>
-                <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
-                  0 Reports
-                </Badge>
+              )}
+              
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
+                  <User className="w-4 h-4" />
+                  <span>{currentUser?.name}</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLogout}
+                  className="text-gray-600 hover:text-red-600 hover:border-red-200"
+                >
+                  <LogOut className="w-4 h-4" />
+                </Button>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </header>
@@ -620,7 +819,7 @@ function App() {
 
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-6">
-            {userStats && (
+            {userStats ? (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card className="bg-white/70 backdrop-blur-sm border-emerald-100">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -657,6 +856,11 @@ function App() {
                     <p className="text-xs text-gray-600 mt-1">Completed research reports</p>
                   </CardContent>
                 </Card>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading dashboard...</p>
               </div>
             )}
           </TabsContent>

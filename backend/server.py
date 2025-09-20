@@ -15,6 +15,8 @@ import json
 from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 import asyncio
 import random
+import hashlib
+import secrets
 
 
 ROOT_DIR = Path(__file__).parent
@@ -40,12 +42,25 @@ class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     email: str
+    password_hash: str = ""
     credits: int = 100
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserCreate(BaseModel):
     name: str
     email: str
+    password: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class UserResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    credits: int
+    created_at: datetime
 
 class ResearchQuestion(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -71,6 +86,20 @@ class NewsItem(BaseModel):
     content: str
     source: str
     published_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# Helper functions
+def hash_password(password: str) -> str:
+    """Hash a password with salt"""
+    salt = secrets.token_hex(32)
+    password_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
+    return salt + password_hash.hex()
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify a password against its hash"""
+    salt = hashed[:64]
+    stored_hash = hashed[64:]
+    password_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
+    return password_hash.hex() == stored_hash
 
 # Mock news data for live updates
 MOCK_NEWS = [
@@ -125,24 +154,81 @@ Format your responses as structured reports with:
 async def root():
     return {"message": "Smart Research Assistant API"}
 
-@api_router.post("/users", response_model=User)
-async def create_user(user: UserCreate):
-    user_dict = user.dict()
-    user_obj = User(**user_dict)
-    await db.users.insert_one(user_obj.dict())
-    return user_obj
+# Authentication Routes
+@api_router.post("/auth/signup")
+async def signup(user_data: UserCreate):
+    try:
+        # Check if user already exists
+        existing_user = await db.users.find_one({"email": user_data.email})
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Create new user
+        hashed_password = hash_password(user_data.password)
+        user = User(
+            name=user_data.name,
+            email=user_data.email,
+            password_hash=hashed_password
+        )
+        
+        user_dict = user.dict()
+        await db.users.insert_one(user_dict)
+        
+        # Return user without password hash
+        user_response = UserResponse(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            credits=user.credits,
+            created_at=user.created_at
+        )
+        
+        return {"user": user_response, "message": "Account created successfully"}
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Signup failed")
 
-@api_router.get("/users/{user_id}", response_model=User)
+@api_router.post("/auth/login")
+async def login(login_data: UserLogin):
+    try:
+        # Find user by email
+        user = await db.users.find_one({"email": login_data.email})
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        # Verify password
+        if not verify_password(login_data.password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        # Remove MongoDB ObjectId and password hash
+        if "_id" in user:
+            del user["_id"]
+        if "password_hash" in user:
+            del user["password_hash"]
+        
+        user_response = UserResponse(**user)
+        return {"user": user_response, "message": "Login successful"}
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Login failed")
+
+@api_router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(user_id: str):
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Remove MongoDB ObjectId before serialization
+    # Remove MongoDB ObjectId and password hash before serialization
     if "_id" in user:
         del user["_id"]
+    if "password_hash" in user:
+        del user["password_hash"]
     
-    return User(**user)
+    return UserResponse(**user)
 
 @api_router.put("/users/{user_id}/credits")
 async def update_credits(user_id: str, credits_used: int):
