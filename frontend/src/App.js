@@ -115,7 +115,7 @@ function App() {
 
   const fetchUserStats = async () => {
     try {
-      const response = await axios.get(`${API}/stats/${currentUser.id}`);
+      const response = await axios.get(`stats/${currentUser.id}`);
       setUserStats(response.data);
     } catch (error) {
       console.error("Failed to fetch user stats:", error);
@@ -124,7 +124,7 @@ function App() {
 
   const fetchUserReports = async () => {
     try {
-      const response = await axios.get(`${API}/reports/${currentUser.id}`);
+      const response = await axios.get(`reports/${currentUser.id}`);
       setReports(response.data);
     } catch (error) {
       console.error("Failed to fetch reports:", error);
@@ -168,7 +168,7 @@ function App() {
         const formData = new FormData();
         formData.append('file', file);
         
-        const response = await axios.post(`${API}/upload`, formData);
+        const response = await axios.post(`upload`, formData);
         
         setUploadedFiles(prev => [...prev, {
           id: response.data.file_id,
@@ -212,7 +212,7 @@ function App() {
       formData.append('question', question);
       formData.append('file_ids', JSON.stringify(uploadedFiles.map(f => f.id)));
 
-      const response = await axios.post(`${API}/research`, formData);
+      const response = await axios.post(`research`, formData);
 
       const questionId = response.data.question_id;
       toast.success("Research question submitted! Processing...");
@@ -237,7 +237,7 @@ function App() {
 
     const poll = async () => {
       try {
-        const response = await axios.get(`${API}/research/${questionId}`);
+        const response = await axios.get(`research/${questionId}`);
         
         if (response.data.status === "completed") {
           setIsProcessing(false);
