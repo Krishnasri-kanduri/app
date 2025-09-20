@@ -132,11 +132,31 @@ function App() {
   };
 
   const fetchLatestNews = async () => {
+    const isNetworkError = (err) => err && err.isAxiosError && !err.response;
+
     try {
-      const response = await axios.get(`${API}/news`);
+      const response = await axios.get(`/news`);
       setLatestNews(response.data);
     } catch (error) {
       console.error("Failed to fetch news:", error);
+      if (isNetworkError(error)) {
+        // Fallback to built-in mock news so the UI still has content when backend is unreachable
+        const fallbackNews = [
+          {
+            id: 'local-1',
+            title: 'Local News: Running in Offline Mode',
+            content: 'The application is currently running without a backend connection. Some features may be limited.',
+            source: 'Local'
+          },
+          {
+            id: 'local-2',
+            title: 'Tip: Connect a Backend',
+            content: 'To enable live data and file uploads, start the backend API or set REACT_APP_BACKEND_URL to a reachable endpoint.',
+            source: 'Local'
+          }
+        ];
+        setLatestNews(fallbackNews);
+      }
     }
   };
 
