@@ -61,7 +61,7 @@ function App() {
         const user = JSON.parse(savedUser);
         // Verify user still exists in backend
         try {
-          const response = await axios.get(`/users/${user.id}`);
+          const response = await axios.get(`users/${user.id}`);
           setCurrentUser(response.data);
           console.log("Existing user loaded from localStorage");
           return;
@@ -84,7 +84,7 @@ function App() {
       };
 
       try {
-        const response = await axios.post(`/users`, userData);
+        const response = await axios.post(`users`, userData);
         setCurrentUser(response.data);
         localStorage.setItem('researchAssistantUser', JSON.stringify(response.data));
         toast.success("Welcome to Smart Research Assistant!");
