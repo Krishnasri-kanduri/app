@@ -12,7 +12,74 @@ import uuid
 from datetime import datetime, timezone
 import aiofiles
 import json
-from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+# Try to use Emergent Integrations if available; otherwise fall back to Google Generative AI directly
+try:
+    from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+    HAS_EI = True
+except Exception:
+    HAS_EI = False
+    from dataclasses import dataclass
+    from typing import Optional
+
+    @dataclass
+    class FileContentWithMimeType:
+        file_path: str
+        mime_type: str
+
+    @dataclass
+    class UserMessage:
+        text: str
+        file_contents: Optional[List[FileContentWithMimeType]] = None
+
+    class FallbackChat:
+        def __init__(self, api_key: Optional[str], session_id: str, system_message: str):
+            self.api_key = api_key
+            self.session_id = session_id
+            self.system_message = system_message
+            self._model_name = "gemini-1.5-flash"
+
+        def with_model(self, provider: str, model: str):
+            # Keep API similar to LlmChat; ignore provider and store model
+            if model:
+                self._model_name = model
+            return self
+
+        async def send_message(self, user_message: UserMessage) -> str:
+            import google.generativeai as genai
+            if self.api_key:
+                genai.configure(api_key=self.api_key)
+
+            # Build prompt with optional file excerpts (limit size)
+            excerpts = []
+            if user_message.file_contents:
+                for fc in user_message.file_contents:
+                    try:
+                        # Read a small portion to avoid huge prompts
+                        with open(fc.file_path, "rb") as f:
+                            data = f.read(200_000)
+                        # Try decode as utf-8; if fails, just note the filename
+                        try:
+                            text = data.decode("utf-8", errors="ignore")
+                            excerpts.append(f"\n--- FILE: {os.path.basename(fc.file_path)} ({fc.mime_type}) ---\n{text}\n")
+                        except Exception:
+                            excerpts.append(f"\n--- FILE: {os.path.basename(fc.file_path)} ({fc.mime_type}) ---\n[Binary content omitted]\n")
+                    except Exception:
+                        excerpts.append(f"\n--- FILE: {os.path.basename(fc.file_path)} ({fc.mime_type}) ---\n[Failed to read file]\n")
+
+            full_prompt = (
+                self.system_message
+                + "\n\nUser Request:\n"
+                + user_message.text
+                + ("\n\nFile Excerpts:" + "".join(excerpts) if excerpts else "")
+            )
+
+            model = genai.GenerativeModel(self._model_name)
+            # Run in thread to avoid blocking loop if SDK is sync
+            def _gen():
+                res = model.generate_content(full_prompt)
+                return getattr(res, "text", str(res))
+
+            return await asyncio.to_thread(_gen)
 import asyncio
 import random
 import hashlib
@@ -132,10 +199,8 @@ MOCK_NEWS = [
 
 # Initialize Gemini chat
 async def get_gemini_chat():
-    return LlmChat(
-        api_key=os.environ.get('EMERGENT_LLM_KEY'),
-        session_id="research-assistant",
-        system_message="""You are a Smart Research Assistant. Your role is to:
+    api_key = os.environ.get('EMERGENT_LLM_KEY')
+    system_message = """You are a Smart Research Assistant. Your role is to:
 1. Analyze uploaded files and live data sources
 2. Generate concise, evidence-based research reports (2-3 paragraphs)
 3. Always include specific citations and sources
@@ -146,7 +211,15 @@ Format your responses as structured reports with:
 - Key Findings (main insights)
 - Supporting Evidence (with citations)
 - Sources Used (list all sources referenced)"""
-    ).with_model("gemini", "gemini-2.0-flash")
+    if HAS_EI:
+        return LlmChat(
+            api_key=api_key,
+            session_id="research-assistant",
+            system_message=system_message
+        ).with_model("gemini", "gemini-2.0-flash")
+    else:
+        # Use lightweight fallback that talks to Gemini via google-generativeai
+        return FallbackChat(api_key=api_key, session_id="research-assistant", system_message=system_message)
 
 # Routes
 
