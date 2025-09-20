@@ -114,11 +114,33 @@ function App() {
   };
 
   const fetchUserStats = async () => {
+    const isNetworkError = (err) => err && err.isAxiosError && !err.response;
+
     try {
+      // If user is a local fallback, avoid calling backend
+      if (currentUser && String(currentUser.id).startsWith('local-')) {
+        setUserStats({
+          credits_remaining: currentUser.credits ?? 100,
+          total_questions_asked: 0,
+          reports_generated: 0,
+          credits_used: 0
+        });
+        return;
+      }
+
       const response = await axios.get(`stats/${currentUser.id}`);
       setUserStats(response.data);
     } catch (error) {
       console.error("Failed to fetch user stats:", error);
+      if (isNetworkError(error)) {
+        // Fallback to safe defaults
+        setUserStats({
+          credits_remaining: currentUser?.credits ?? 100,
+          total_questions_asked: 0,
+          reports_generated: 0,
+          credits_used: 0
+        });
+      }
     }
   };
 
