@@ -179,13 +179,15 @@ function App() {
             id: 'local-1',
             title: 'Local News: Running in Offline Mode',
             content: 'The application is currently running without a backend connection. Some features may be limited.',
-            source: 'Local'
+            source: 'Local',
+            published_at: new Date().toISOString()
           },
           {
             id: 'local-2',
             title: 'Tip: Connect a Backend',
             content: 'To enable live data and file uploads, start the backend API or set REACT_APP_BACKEND_URL to a reachable endpoint.',
-            source: 'Local'
+            source: 'Local',
+            published_at: new Date().toISOString()
           }
         ];
         setLatestNews(fallbackNews);
