@@ -12,7 +12,74 @@ import uuid
 from datetime import datetime, timezone
 import aiofiles
 import json
-from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+# Try to use Emergent Integrations if available; otherwise fall back to Google Generative AI directly
+try:
+    from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+    HAS_EI = True
+except Exception:
+    HAS_EI = False
+    from dataclasses import dataclass
+    from typing import Optional
+
+    @dataclass
+    class FileContentWithMimeType:
+        file_path: str
+        mime_type: str
+
+    @dataclass
+    class UserMessage:
+        text: str
+        file_contents: Optional[List[FileContentWithMimeType]] = None
+
+    class FallbackChat:
+        def __init__(self, api_key: Optional[str], session_id: str, system_message: str):
+            self.api_key = api_key
+            self.session_id = session_id
+            self.system_message = system_message
+            self._model_name = "gemini-1.5-flash"
+
+        def with_model(self, provider: str, model: str):
+            # Keep API similar to LlmChat; ignore provider and store model
+            if model:
+                self._model_name = model
+            return self
+
+        async def send_message(self, user_message: UserMessage) -> str:
+            import google.generativeai as genai
+            if self.api_key:
+                genai.configure(api_key=self.api_key)
+
+            # Build prompt with optional file excerpts (limit size)
+            excerpts = []
+            if user_message.file_contents:
+                for fc in user_message.file_contents:
+                    try:
+                        # Read a small portion to avoid huge prompts
+                        with open(fc.file_path, "rb") as f:
+                            data = f.read(200_000)
+                        # Try decode as utf-8; if fails, just note the filename
+                        try:
+                            text = data.decode("utf-8", errors="ignore")
+                            excerpts.append(f"\n--- FILE: {os.path.basename(fc.file_path)} ({fc.mime_type}) ---\n{text}\n")
+                        except Exception:
+                            excerpts.append(f"\n--- FILE: {os.path.basename(fc.file_path)} ({fc.mime_type}) ---\n[Binary content omitted]\n")
+                    except Exception:
+                        excerpts.append(f"\n--- FILE: {os.path.basename(fc.file_path)} ({fc.mime_type}) ---\n[Failed to read file]\n")
+
+            full_prompt = (
+                self.system_message
+                + "\n\nUser Request:\n"
+                + user_message.text
+                + ("\n\nFile Excerpts:" + "".join(excerpts) if excerpts else "")
+            )
+
+            model = genai.GenerativeModel(self._model_name)
+            # Run in thread to avoid blocking loop if SDK is sync
+            def _gen():
+                res = model.generate_content(full_prompt)
+                return getattr(res, "text", str(res))
+
+            return await asyncio.to_thread(_gen)
 import asyncio
 import random
 import hashlib
