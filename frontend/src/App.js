@@ -140,7 +140,7 @@ function App() {
       
       if (authMode === "signup") {
         // Create new user
-        response = await axios.post(`${API}/auth/signup`, {
+        response = await axios.post(`auth/signup`, {
           name: authForm.name,
           email: authForm.email,
           password: authForm.password
