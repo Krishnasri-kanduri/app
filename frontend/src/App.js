@@ -291,8 +291,15 @@ function App() {
           toast.error("Research processing timed out");
         }
       } catch (error) {
-        setIsProcessing(false);
-        toast.error("Error checking research status");
+        // If network error, retry until timeout
+        const isNetworkError = (err) => err && err.isAxiosError && !err.response;
+        if (isNetworkError(error) && attempts < maxAttempts) {
+          attempts++;
+          setTimeout(poll, 1000);
+        } else {
+          setIsProcessing(false);
+          toast.error("Error checking research status");
+        }
       }
     };
 
