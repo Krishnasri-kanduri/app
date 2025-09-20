@@ -168,7 +168,7 @@ function App() {
     const isNetworkError = (err) => err && err.isAxiosError && !err.response;
 
     try {
-      const response = await axios.get(`/news`);
+      const response = await axios.get(`news`);
       setLatestNews(response.data);
     } catch (error) {
       console.error("Failed to fetch news:", error);
@@ -213,8 +213,19 @@ function App() {
         
         toast.success(`File "${file.name}" uploaded successfully!`);
       } catch (error) {
+        const isNetworkError = (err) => err && err.isAxiosError && !err.response;
         console.error("File upload failed:", error);
-        toast.error(`Failed to upload "${file.name}"`);
+        if (isNetworkError(error)) {
+          const localId = `local-file-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          setUploadedFiles(prev => [...prev, {
+            id: localId,
+            name: file.name,
+            size: file.size
+          }]);
+          toast.success(`Added "${file.name}" (local only)`);
+        } else {
+          toast.error(`Failed to upload "${file.name}"`);
+        }
       }
     }
   };
@@ -260,7 +271,58 @@ function App() {
       setUploadedFiles([]);
 
     } catch (error) {
+      const isNetworkError = (err) => err && err.isAxiosError && !err.response;
       console.error("Research submission failed:", error);
+
+      // Offline/local fallback flow
+      if (isNetworkError(error) || String(currentUser.id).startsWith('local-')) {
+        const now = new Date().toISOString();
+        const qId = `local-q-${Date.now()}`;
+        const rId = `local-r-${Date.now()}`;
+        const sources = uploadedFiles.map(f => f.name);
+        const reportText = `Key Findings\n- Offline mode: generated a local report.\n- Your question: ${question}\n\nSupporting Evidence\n- Files provided: ${sources.length ? sources.join(', ') : 'none'}\n\nActionable Recommendations\n- Connect the backend to generate AI-powered reports.\n\nSources Referenced\n- ${sources.length ? sources.join('\n- ') : 'No files uploaded'}`;
+
+        const localReportItem = {
+          report: {
+            id: rId,
+            question_id: qId,
+            user_id: currentUser.id,
+            report: reportText,
+            citations: sources.map(s => `Source: ${s}`),
+            sources_used: sources,
+            live_data_included: false,
+            created_at: now
+          },
+          question: {
+            id: qId,
+            user_id: currentUser.id,
+            question: question,
+            files: uploadedFiles.map(f => f.id),
+            status: 'completed',
+            created_at: now
+          }
+        };
+
+        setReports(prev => [localReportItem, ...prev]);
+        setIsProcessing(false);
+        setActiveTab('reports');
+        setQuestion("");
+        setUploadedFiles([]);
+
+        setUserStats(prev => {
+          const credits = (prev?.credits_remaining ?? currentUser.credits ?? 100) - 1;
+          return {
+            credits_remaining: Math.max(0, credits),
+            total_questions_asked: (prev?.total_questions_asked ?? 0) + 1,
+            reports_generated: (prev?.reports_generated ?? 0) + 1,
+            credits_used: (prev?.credits_used ?? 0) + 1
+          };
+        });
+
+        toast.success("Local report generated (offline mode)");
+        return;
+      }
+
       toast.error("Failed to submit research question");
       setIsProcessing(false);
     }
