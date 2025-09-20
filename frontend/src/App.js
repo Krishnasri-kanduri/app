@@ -145,11 +145,22 @@ function App() {
   };
 
   const fetchUserReports = async () => {
+    const isNetworkError = (err) => err && err.isAxiosError && !err.response;
+
     try {
+      // If user is local fallback, nothing to fetch
+      if (currentUser && String(currentUser.id).startsWith('local-')) {
+        setReports([]);
+        return;
+      }
+
       const response = await axios.get(`reports/${currentUser.id}`);
       setReports(response.data);
     } catch (error) {
       console.error("Failed to fetch reports:", error);
+      if (isNetworkError(error)) {
+        setReports([]);
+      }
     }
   };
 
