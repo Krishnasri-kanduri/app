@@ -15,6 +15,9 @@ import { Toaster } from "./components/ui/sonner";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 // Use explicit relative API root when no backend URL provided (works in dev with proxy or production when served together)
 const API = BACKEND_URL ? `${BACKEND_URL.replace(/\/$/, "")}/api` : "/api";
+// Configure axios defaults to use the API root and a reasonable timeout
+axios.defaults.baseURL = API;
+axios.defaults.timeout = 10000;
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
