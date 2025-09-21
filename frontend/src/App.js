@@ -154,6 +154,22 @@ function App() {
     const isNetworkError = (err) => err && err.isAxiosError && !err.response;
 
     try {
+      // If we already know backend is unreachable, create a local fallback user immediately
+      if (backendAvailable === false) {
+        const userData = {
+          id: `local-${Date.now()}`,
+          name: 'Research User',
+          email: `user_${Date.now()}@example.com`,
+          credits: 100,
+          created_at: new Date().toISOString()
+        };
+        console.warn('Backend offline, using local fallback user', userData);
+        setCurrentUser(userData);
+        localStorage.setItem('researchAssistantUser', JSON.stringify(userData));
+        toast.success('Running in offline mode: local user created');
+        return;
+      }
+
       const savedUser = localStorage.getItem('researchAssistantUser');
 
       if (savedUser) {
