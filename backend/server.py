@@ -553,13 +553,20 @@ async def get_user_stats(user_id: str):
 # Include the router in the main app
 app.include_router(api_router)
 
+origins = os.environ.get("CORS_ORIGINS", "")
+if origins == "*":
+    allow_origins = ["*"]
+else:
+    allow_origins = [o.strip() for o in origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=allow_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Configure logging
 logging.basicConfig(
