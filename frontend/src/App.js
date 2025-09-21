@@ -8,16 +8,91 @@ import { Textarea } from "./components/ui/textarea";
 import { Badge } from "./components/ui/badge";
 import { Progress } from "./components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { Upload, FileText, Brain, TrendingUp, Search, Zap, Target, UserPlus, LogIn, LogOut, User } from "lucide-react";
+import { Upload, FileText, Brain, TrendingUp, Search, Zap, Target, UserPlus, LogIn, LogOut, User, Share2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
-// Use explicit relative API root when no backend URL provided (works in dev with proxy or production when served together)
-const API = BACKEND_URL ? `${BACKEND_URL.replace(/\/$/, "")}/api` : "/api";
+// Determine API base: prefer explicit env; otherwise try to infer a sensible default for deployed apps
+const API = (() => {
+  if (BACKEND_URL) return `${BACKEND_URL.replace(/\/$/, "")}/api`;
+  if (typeof window !== 'undefined') {
+    const origin = window.location.origin;
+    // If app is hosted (fly.dev, render.com, localhost) assume backend lives at same origin under /api
+    if (origin.includes('fly.dev') || origin.includes('render.com') || origin.includes('localhost')) {
+      return `${origin}/api`;
+    }
+  }
+  // Fallback to relative API root (works with CRA proxy or when backend served from same host)
+  return "/api";
+})();
+console.info('API base set to:', API);
 // Configure axios defaults to use the API root and a reasonable timeout
 axios.defaults.baseURL = API;
 axios.defaults.timeout = 10000;
+// Do not send cookies by default; avoid CORS credential issues unless explicitly needed
+axios.defaults.withCredentials = false;
+
+// Log and surface axios errors for easier debugging in deployed environments
+function safeStringify(obj) {
+  const seen = new WeakSet();
+  try {
+    return JSON.stringify(obj, function (key, value) {
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) return '[Circular]';
+        seen.add(value);
+      }
+      return value;
+    }, 2);
+  } catch (e) {
+    return String(obj);
+  }
+}
+
+axios.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    const payload = {
+      message: err?.message,
+      isAxiosError: !!err?.isAxiosError,
+      config: err?.config && { url: err.config.url, method: err.config.method, baseURL: err.config.baseURL },
+      responseStatus: err?.response?.status,
+      responseData: err?.response?.data
+    };
+    // Log both object and stringified version to avoid `[object Object]` in some consoles
+    console.error('Axios error:', payload);
+    console.error('Axios error (json):', safeStringify(payload));
+
+    // For network errors, add a hint to the message to help debugging
+    if (err?.message === 'Network Error' && err?.config) {
+      err.message = `Network Error: could not reach ${err.config.baseURL || API} (request to ${err.config.url})`;
+    }
+
+    return Promise.reject(err);
+  }
+);
+
+// Helper to consistently format axios errors for logging and UI
+function formatAxiosError(err) {
+  try {
+    return {
+      message: err?.message || String(err),
+      isAxiosError: !!err?.isAxiosError,
+      status: err?.response?.status,
+      data: err?.response?.data,
+      config: err?.config && { url: err.config.url, method: err.config.method, baseURL: err.config.baseURL }
+    };
+  } catch (e) {
+    return { message: String(err) };
+  }
+}
+
+// Catch unhandled promise rejections to aid debugging in production
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled promise rejection:', formatAxiosError(event.reason));
+  });
+}
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -37,9 +112,27 @@ function App() {
     password: ""
   });
 
+  const [backendAvailable, setBackendAvailable] = useState(true);
+
+  // Ping backend to determine availability
+  const pingBackend = async () => {
+    try {
+      // Use a short timeout to avoid long delays
+      const res = await axios.get('', { timeout: 3000 });
+      setBackendAvailable(true);
+      return true;
+    } catch (err) {
+      console.warn('Backend ping failed:', err?.message || String(err));
+      setBackendAvailable(false);
+      return false;
+    }
+  };
+
   // Initialize user on component mount
   useEffect(() => {
     const initialize = async () => {
+      // Ping backend first, then proceed
+      await pingBackend();
       await Promise.all([
         checkAuthStatus(),
         fetchLatestNews()
@@ -61,6 +154,22 @@ function App() {
     const isNetworkError = (err) => err && err.isAxiosError && !err.response;
 
     try {
+      // If we already know backend is unreachable, create a local fallback user immediately
+      if (backendAvailable === false) {
+        const userData = {
+          id: `local-${Date.now()}`,
+          name: 'Research User',
+          email: `user_${Date.now()}@example.com`,
+          credits: 100,
+          created_at: new Date().toISOString()
+        };
+        console.warn('Backend offline, using local fallback user', userData);
+        setCurrentUser(userData);
+        localStorage.setItem('researchAssistantUser', JSON.stringify(userData));
+        toast.success('Running in offline mode: local user created');
+        return;
+      }
+
       const savedUser = localStorage.getItem('researchAssistantUser');
 
       if (savedUser) {
@@ -115,7 +224,7 @@ function App() {
         setShowAuth(true);
       }
     } catch (error) {
-      console.error("Auth check failed:", error);
+      console.error("Auth check failed:", formatAxiosError(error));
       setShowAuth(true);
     }
   };
@@ -161,9 +270,40 @@ function App() {
       setAuthForm({ name: "", email: "", password: "" });
       
     } catch (error) {
-      console.error("Auth failed:", error);
-      if (error.response?.data?.detail) {
-        toast.error(error.response.data.detail);
+      console.error("Auth failed:", formatAxiosError(error));
+      const isNetworkError = (err) => err && err.isAxiosError && !err.response;
+      const detail = error.response?.data?.detail;
+
+      // Network unreachable
+      if (isNetworkError(error)) {
+        toast.error(`Network error: could not reach backend at ${API}. Check REACT_APP_BACKEND_URL, CORS_ORIGINS, and that the backend is running.`);
+        return;
+      }
+
+      // Signup conflict: email already registered — attempt to login automatically
+      if (authMode === 'signup' && detail && String(detail).toLowerCase().includes('email already registered')) {
+        try {
+          const loginResp = await axios.post('auth/login', {
+            email: authForm.email,
+            password: authForm.password
+          });
+          toast.success('Existing account found — signed in successfully');
+          setCurrentUser(loginResp.data.user);
+          localStorage.setItem('researchAssistantUser', JSON.stringify(loginResp.data.user));
+          setShowAuth(false);
+          setAuthForm({ name: '', email: '', password: '' });
+          return;
+        } catch (loginErr) {
+          // If automatic login failed, switch to login mode and surface the original detail
+          console.warn('Automatic login after signup conflict failed:', formatAxiosError(loginErr));
+          setAuthMode('login');
+          toast.error(detail || 'Email already registered. Please sign in.');
+          return;
+        }
+      }
+
+      if (detail) {
+        toast.error(detail);
       } else {
         toast.error(authMode === "signup" ? "Signup failed" : "Login failed");
       }
@@ -208,7 +348,7 @@ function App() {
           credits_used: 0
         });
       } else {
-        console.error("Failed to fetch user stats:", error);
+        console.error("Failed to fetch user stats:", formatAxiosError(error));
       }
     }
   };
@@ -224,14 +364,21 @@ function App() {
       }
 
       const response = await axios.get(`reports/${currentUser.id}`);
-      setReports(response.data);
+      const sorted = Array.isArray(response.data)
+        ? [...response.data].sort((a, b) => {
+            const aTime = new Date(a.report?.created_at || 0).getTime();
+            const bTime = new Date(b.report?.created_at || 0).getTime();
+            return bTime - aTime; // newest first
+          })
+        : [];
+      setReports(sorted);
     } catch (error) {
       const isNet = isNetworkError(error);
       if (isNet) {
         // Suppress console error noise in offline mode
         setReports([]);
       } else {
-        console.error("Failed to fetch reports:", error);
+        console.error("Failed to fetch reports:", formatAxiosError(error));
       }
     }
   };
@@ -266,6 +413,103 @@ function App() {
     }
   };
 
+  // Helpers for exporting/sharing reports
+  const sanitizeFilename = (name) => name.replace(/[^a-z0-9-_]+/gi, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+
+  const buildReportExport = (item) => {
+    const title = item.question?.question || 'report';
+    const dateStr = new Date(item.report?.created_at || Date.now()).toISOString().split('T')[0];
+    const sources = (item.report?.sources_used || []).map((s) => `- ${s}`).join('\n');
+    const body = String(item.report?.report || '').trim();
+    const text = `Title: ${title}\nDate: ${dateStr}\n\nReport:\n${body}\n\nSources Used:\n${sources}`;
+    const filenameBase = `${sanitizeFilename(title).slice(0, 60)}-${dateStr}`;
+    return { text, json: item, filenameBase };
+  };
+
+  const downloadBlob = (content, filename, mime) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadReport = (item, type = 'txt') => {
+    try {
+      const { text, json, filenameBase } = buildReportExport(item);
+      if (type === 'json') {
+        downloadBlob(JSON.stringify(json, null, 2), `${filenameBase}.json`, 'application/json');
+      } else if (type === 'md') {
+        const md = `# ${item.question?.question || 'Research Report'}\n\n_${new Date(item.report?.created_at || Date.now()).toLocaleString()}_\n\n${String(item.report?.report || '').trim()}\n\n## Sources Used\n${(item.report?.sources_used || []).map(s => `- ${s}`).join('\n')}`;
+        downloadBlob(md, `${filenameBase}.md`, 'text/markdown');
+      } else {
+        downloadBlob(text, `${filenameBase}.txt`, 'text/plain');
+      }
+      toast.success('Report downloaded');
+    } catch (e) {
+      toast.error('Failed to download report');
+    }
+  };
+
+
+  const handleShareReport = async (item) => {
+    const { text } = buildReportExport(item);
+    const title = item.question?.question || 'Research Report';
+
+    // 1) Native share if available
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text });
+        toast.success('Share sheet opened');
+        return;
+      }
+    } catch (e) {
+      // proceed to clipboard fallback
+    }
+
+    // 2) Modern clipboard API
+    try {
+      await navigator.clipboard.writeText(`${title}\n\n${text}`);
+      toast.success('Copied to clipboard');
+      return;
+    } catch (e) {
+      // proceed to legacy fallback
+    }
+
+    // 3) Legacy execCommand fallback (works in iframes without clipboard-write)
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = `${title}\n\n${text}`;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'absolute';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) {
+        toast.success('Copied to clipboard');
+        return;
+      }
+      throw new Error('execCommand copy failed');
+    } catch (e) {
+      // proceed to download fallback
+    }
+
+    // 4) As a last resort, download a .txt the user can share
+    try {
+      const filenameBase = sanitizeFilename(title) || 'report';
+      downloadBlob(`${title}\n\n${text}`, `${filenameBase}.txt`, 'text/plain');
+      toast.success('Downloaded .txt to share');
+    } catch (e) {
+      toast.error('Sharing failed');
+    }
+  };
+
   const handleFileUpload = async (event) => {
     const files = Array.from(event.target.files);
     
@@ -294,7 +538,7 @@ function App() {
           }]);
           toast.success(`Added \"${file.name}\" (local only)`);
         } else {
-          console.error("File upload failed:", error);
+          console.error("File upload failed:", formatAxiosError(error));
           toast.error(`Failed to upload \"${file.name}\"`);
         }
       }
@@ -343,7 +587,7 @@ function App() {
 
     } catch (error) {
       const isNetworkError = (err) => err && err.isAxiosError && !err.response;
-      console.error("Research submission failed:", error);
+      console.error("Research submission failed:", formatAxiosError(error));
 
       // Offline/local fallback flow
       if (isNetworkError(error) || String(currentUser.id).startsWith('local-')) {
@@ -788,10 +1032,24 @@ function App() {
                 reports.map((item) => (
                   <Card key={item.report.id} className="bg-white/70 backdrop-blur-sm border-emerald-100">
                     <CardHeader>
-                      <CardTitle className="text-emerald-800">{item.question.question}</CardTitle>
-                      <CardDescription>
-                        Generated on {new Date(item.report.created_at).toLocaleDateString()}
-                      </CardDescription>
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <CardTitle className="text-emerald-800">{item.question.question}</CardTitle>
+                          <CardDescription>
+                            Generated on {new Date(item.report.created_at).toLocaleDateString()}
+                          </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={() => handleDownloadReport(item, 'txt')} aria-label="Download report">
+                            <Download className="w-4 h-4" />
+                            <span className="sr-only">Download</span>
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handleShareReport(item)} aria-label="Share report">
+                            <Share2 className="w-4 h-4" />
+                            <span className="sr-only">Share</span>
+                          </Button>
+                        </div>
+                      </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="prose prose-emerald max-w-none">

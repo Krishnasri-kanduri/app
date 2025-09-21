@@ -199,7 +199,12 @@ MOCK_NEWS = [
 
 # Initialize Gemini chat
 async def get_gemini_chat():
-    api_key = os.environ.get('EMERGENT_LLM_KEY')
+    # Support common env var names for Gemini API key
+    api_key = (
+        os.environ.get('EMERGENT_LLM_KEY')
+        or os.environ.get('GOOGLE_API_KEY')
+        or os.environ.get('GEMINI_API_KEY')
+    )
     system_message = """You are a Smart Research Assistant. Your role is to:
 1. Analyze uploaded files and live data sources
 2. Generate concise, evidence-based research reports (2-3 paragraphs)
