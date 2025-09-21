@@ -13,8 +13,20 @@ import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
-// Use explicit relative API root when no backend URL provided (works in dev with proxy or production when served together)
-const API = BACKEND_URL ? `${BACKEND_URL.replace(/\/$/, "")}/api` : "/api";
+// Determine API base: prefer explicit env; otherwise try to infer a sensible default for deployed apps
+const API = (() => {
+  if (BACKEND_URL) return `${BACKEND_URL.replace(/\/$/, "")}/api`;
+  if (typeof window !== 'undefined') {
+    const origin = window.location.origin;
+    // If app is hosted (fly.dev, render.com, localhost) assume backend lives at same origin under /api
+    if (origin.includes('fly.dev') || origin.includes('render.com') || origin.includes('localhost')) {
+      return `${origin}/api`;
+    }
+  }
+  // Fallback to relative API root (works with CRA proxy or when backend served from same host)
+  return "/api";
+})();
+console.info('API base set to:', API);
 // Configure axios defaults to use the API root and a reasonable timeout
 axios.defaults.baseURL = API;
 axios.defaults.timeout = 10000;
