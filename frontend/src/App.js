@@ -8,7 +8,7 @@ import { Textarea } from "./components/ui/textarea";
 import { Badge } from "./components/ui/badge";
 import { Progress } from "./components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { Upload, FileText, Brain, TrendingUp, Search, Zap, Target, UserPlus, LogIn, LogOut, User, Share2, Download, Copy } from "lucide-react";
+import { Upload, FileText, Brain, TrendingUp, Search, Zap, Target, UserPlus, LogIn, LogOut, User, Share2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 
@@ -455,15 +455,6 @@ function App() {
     }
   };
 
-  const handleCopyReport = async (item) => {
-    try {
-      const { text } = buildReportExport(item);
-      await navigator.clipboard.writeText(text);
-      toast.success('Report copied to clipboard');
-    } catch (e) {
-      toast.error('Failed to copy report');
-    }
-  };
 
   const handleShareReport = async (item) => {
     const { text } = buildReportExport(item);
@@ -1049,10 +1040,6 @@ function App() {
                           </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm" onClick={() => handleCopyReport(item)} aria-label="Copy report">
-                            <Copy className="w-4 h-4" />
-                            <span className="sr-only">Copy</span>
-                          </Button>
                           <Button variant="outline" size="sm" onClick={() => handleDownloadReport(item, 'txt')} aria-label="Download report">
                             <Download className="w-4 h-4" />
                             <span className="sr-only">Download</span>
