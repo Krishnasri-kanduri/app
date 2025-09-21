@@ -34,15 +34,40 @@ axios.defaults.timeout = 10000;
 axios.defaults.withCredentials = false;
 
 // Log and surface axios errors for easier debugging in deployed environments
+function safeStringify(obj) {
+  const seen = new WeakSet();
+  try {
+    return JSON.stringify(obj, function (key, value) {
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) return '[Circular]';
+        seen.add(value);
+      }
+      return value;
+    }, 2);
+  } catch (e) {
+    return String(obj);
+  }
+}
+
 axios.interceptors.response.use(
   (res) => res,
   (err) => {
-    console.error('Axios error:', {
+    const payload = {
       message: err?.message,
+      isAxiosError: !!err?.isAxiosError,
       config: err?.config && { url: err.config.url, method: err.config.method, baseURL: err.config.baseURL },
       responseStatus: err?.response?.status,
       responseData: err?.response?.data
-    });
+    };
+    // Log both object and stringified version to avoid `[object Object]` in some consoles
+    console.error('Axios error:', payload);
+    console.error('Axios error (json):', safeStringify(payload));
+
+    // For network errors, add a hint to the message to help debugging
+    if (err?.message === 'Network Error' && err?.config) {
+      err.message = `Network Error: could not reach ${err.config.baseURL || API} (request to ${err.config.url})`;
+    }
+
     return Promise.reject(err);
   }
 );
