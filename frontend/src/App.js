@@ -190,7 +190,10 @@ function App() {
       
     } catch (error) {
       console.error("Auth failed:", error);
-      if (error.response?.data?.detail) {
+      const isNetworkError = (err) => err && err.isAxiosError && !err.response;
+      if (isNetworkError(error)) {
+        toast.error(`Network error: could not reach backend at ${API}. Check REACT_APP_BACKEND_URL, CORS_ORIGINS, and that the backend is running.`);
+      } else if (error.response?.data?.detail) {
         toast.error(error.response.data.detail);
       } else {
         toast.error(authMode === "signup" ? "Signup failed" : "Login failed");
