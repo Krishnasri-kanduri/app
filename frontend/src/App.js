@@ -211,7 +211,7 @@ function App() {
       setAuthForm({ name: "", email: "", password: "" });
       
     } catch (error) {
-      console.error("Auth failed:", error);
+      console.error("Auth failed:", formatAxiosError(error));
       const isNetworkError = (err) => err && err.isAxiosError && !err.response;
       if (isNetworkError(error)) {
         toast.error(`Network error: could not reach backend at ${API}. Check REACT_APP_BACKEND_URL, CORS_ORIGINS, and that the backend is running.`);
