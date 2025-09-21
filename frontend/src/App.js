@@ -364,7 +364,14 @@ function App() {
       }
 
       const response = await axios.get(`reports/${currentUser.id}`);
-      setReports(response.data);
+      const sorted = Array.isArray(response.data)
+        ? [...response.data].sort((a, b) => {
+            const aTime = new Date(a.report?.created_at || 0).getTime();
+            const bTime = new Date(b.report?.created_at || 0).getTime();
+            return bTime - aTime; // newest first
+          })
+        : [];
+      setReports(sorted);
     } catch (error) {
       const isNet = isNetworkError(error);
       if (isNet) {
