@@ -112,9 +112,27 @@ function App() {
     password: ""
   });
 
+  const [backendAvailable, setBackendAvailable] = useState(true);
+
+  // Ping backend to determine availability
+  const pingBackend = async () => {
+    try {
+      // Use a short timeout to avoid long delays
+      const res = await axios.get('', { timeout: 3000 });
+      setBackendAvailable(true);
+      return true;
+    } catch (err) {
+      console.warn('Backend ping failed:', err?.message || String(err));
+      setBackendAvailable(false);
+      return false;
+    }
+  };
+
   // Initialize user on component mount
   useEffect(() => {
     const initialize = async () => {
+      // Ping backend first, then proceed
+      await pingBackend();
       await Promise.all([
         checkAuthStatus(),
         fetchLatestNews()
