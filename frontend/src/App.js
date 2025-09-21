@@ -38,14 +38,36 @@ axios.interceptors.response.use(
   (res) => res,
   (err) => {
     console.error('Axios error:', {
-      message: err.message,
-      config: err.config && { url: err.config.url, method: err.config.method, baseURL: err.config.baseURL },
-      responseStatus: err.response?.status,
-      responseData: err.response?.data
+      message: err?.message,
+      config: err?.config && { url: err.config.url, method: err.config.method, baseURL: err.config.baseURL },
+      responseStatus: err?.response?.status,
+      responseData: err?.response?.data
     });
     return Promise.reject(err);
   }
 );
+
+// Helper to consistently format axios errors for logging and UI
+function formatAxiosError(err) {
+  try {
+    return {
+      message: err?.message || String(err),
+      isAxiosError: !!err?.isAxiosError,
+      status: err?.response?.status,
+      data: err?.response?.data,
+      config: err?.config && { url: err.config.url, method: err.config.method, baseURL: err.config.baseURL }
+    };
+  } catch (e) {
+    return { message: String(err) };
+  }
+}
+
+// Catch unhandled promise rejections to aid debugging in production
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled promise rejection:', formatAxiosError(event.reason));
+  });
+}
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
