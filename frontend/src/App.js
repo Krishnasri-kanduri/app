@@ -165,7 +165,7 @@ function App() {
         setShowAuth(true);
       }
     } catch (error) {
-      console.error("Auth check failed:", error);
+      console.error("Auth check failed:", formatAxiosError(error));
       setShowAuth(true);
     }
   };
