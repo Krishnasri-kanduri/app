@@ -30,6 +30,22 @@ console.info('API base set to:', API);
 // Configure axios defaults to use the API root and a reasonable timeout
 axios.defaults.baseURL = API;
 axios.defaults.timeout = 10000;
+// Do not send cookies by default; avoid CORS credential issues unless explicitly needed
+axios.defaults.withCredentials = false;
+
+// Log and surface axios errors for easier debugging in deployed environments
+axios.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    console.error('Axios error:', {
+      message: err.message,
+      config: err.config && { url: err.config.url, method: err.config.method, baseURL: err.config.baseURL },
+      responseStatus: err.response?.status,
+      responseData: err.response?.data
+    });
+    return Promise.reject(err);
+  }
+);
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
