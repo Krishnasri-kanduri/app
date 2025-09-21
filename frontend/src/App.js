@@ -347,7 +347,7 @@ function App() {
           }]);
           toast.success(`Added \"${file.name}\" (local only)`);
         } else {
-          console.error("File upload failed:", error);
+          console.error("File upload failed:", formatAxiosError(error));
           toast.error(`Failed to upload \"${file.name}\"`);
         }
       }
