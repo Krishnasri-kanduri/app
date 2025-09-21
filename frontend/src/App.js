@@ -272,10 +272,38 @@ function App() {
     } catch (error) {
       console.error("Auth failed:", formatAxiosError(error));
       const isNetworkError = (err) => err && err.isAxiosError && !err.response;
+      const detail = error.response?.data?.detail;
+
+      // Network unreachable
       if (isNetworkError(error)) {
         toast.error(`Network error: could not reach backend at ${API}. Check REACT_APP_BACKEND_URL, CORS_ORIGINS, and that the backend is running.`);
-      } else if (error.response?.data?.detail) {
-        toast.error(error.response.data.detail);
+        return;
+      }
+
+      // Signup conflict: email already registered — attempt to login automatically
+      if (authMode === 'signup' && detail && String(detail).toLowerCase().includes('email already registered')) {
+        try {
+          const loginResp = await axios.post('auth/login', {
+            email: authForm.email,
+            password: authForm.password
+          });
+          toast.success('Existing account found — signed in successfully');
+          setCurrentUser(loginResp.data.user);
+          localStorage.setItem('researchAssistantUser', JSON.stringify(loginResp.data.user));
+          setShowAuth(false);
+          setAuthForm({ name: '', email: '', password: '' });
+          return;
+        } catch (loginErr) {
+          // If automatic login failed, switch to login mode and surface the original detail
+          console.warn('Automatic login after signup conflict failed:', formatAxiosError(loginErr));
+          setAuthMode('login');
+          toast.error(detail || 'Email already registered. Please sign in.');
+          return;
+        }
+      }
+
+      if (detail) {
+        toast.error(detail);
       } else {
         toast.error(authMode === "signup" ? "Signup failed" : "Login failed");
       }
