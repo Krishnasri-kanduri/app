@@ -261,7 +261,7 @@ function App() {
           credits_used: 0
         });
       } else {
-        console.error("Failed to fetch user stats:", error);
+        console.error("Failed to fetch user stats:", formatAxiosError(error));
       }
     }
   };
