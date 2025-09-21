@@ -8,7 +8,7 @@ import { Textarea } from "./components/ui/textarea";
 import { Badge } from "./components/ui/badge";
 import { Progress } from "./components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { Upload, FileText, Brain, TrendingUp, Search, Zap, Target, UserPlus, LogIn, LogOut, User } from "lucide-react";
+import { Upload, FileText, Brain, TrendingUp, Search, Zap, Target, UserPlus, LogIn, LogOut, User, Share2, Download, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 
@@ -410,6 +410,76 @@ function App() {
         ];
         setLatestNews(fallbackNews);
       }
+    }
+  };
+
+  // Helpers for exporting/sharing reports
+  const sanitizeFilename = (name) => name.replace(/[^a-z0-9-_]+/gi, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+
+  const buildReportExport = (item) => {
+    const title = item.question?.question || 'report';
+    const dateStr = new Date(item.report?.created_at || Date.now()).toISOString().split('T')[0];
+    const sources = (item.report?.sources_used || []).map((s) => `- ${s}`).join('\n');
+    const body = String(item.report?.report || '').trim();
+    const text = `Title: ${title}\nDate: ${dateStr}\n\nReport:\n${body}\n\nSources Used:\n${sources}`;
+    const filenameBase = `${sanitizeFilename(title).slice(0, 60)}-${dateStr}`;
+    return { text, json: item, filenameBase };
+  };
+
+  const downloadBlob = (content, filename, mime) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadReport = (item, type = 'txt') => {
+    try {
+      const { text, json, filenameBase } = buildReportExport(item);
+      if (type === 'json') {
+        downloadBlob(JSON.stringify(json, null, 2), `${filenameBase}.json`, 'application/json');
+      } else if (type === 'md') {
+        const md = `# ${item.question?.question || 'Research Report'}\n\n_${new Date(item.report?.created_at || Date.now()).toLocaleString()}_\n\n${String(item.report?.report || '').trim()}\n\n## Sources Used\n${(item.report?.sources_used || []).map(s => `- ${s}`).join('\n')}`;
+        downloadBlob(md, `${filenameBase}.md`, 'text/markdown');
+      } else {
+        downloadBlob(text, `${filenameBase}.txt`, 'text/plain');
+      }
+      toast.success('Report downloaded');
+    } catch (e) {
+      toast.error('Failed to download report');
+    }
+  };
+
+  const handleCopyReport = async (item) => {
+    try {
+      const { text } = buildReportExport(item);
+      await navigator.clipboard.writeText(text);
+      toast.success('Report copied to clipboard');
+    } catch (e) {
+      toast.error('Failed to copy report');
+    }
+  };
+
+  const handleShareReport = async (item) => {
+    const { text } = buildReportExport(item);
+    const title = item.question?.question || 'Research Report';
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text });
+        return;
+      }
+    } catch (_) {}
+    // Fallback to copy
+    try {
+      await navigator.clipboard.writeText(`${title}\n\n${text}`);
+      toast.success('Share not available: copied to clipboard');
+    } catch (e) {
+      toast.error('Sharing failed');
     }
   };
 
@@ -935,10 +1005,28 @@ function App() {
                 reports.map((item) => (
                   <Card key={item.report.id} className="bg-white/70 backdrop-blur-sm border-emerald-100">
                     <CardHeader>
-                      <CardTitle className="text-emerald-800">{item.question.question}</CardTitle>
-                      <CardDescription>
-                        Generated on {new Date(item.report.created_at).toLocaleDateString()}
-                      </CardDescription>
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <CardTitle className="text-emerald-800">{item.question.question}</CardTitle>
+                          <CardDescription>
+                            Generated on {new Date(item.report.created_at).toLocaleDateString()}
+                          </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={() => handleCopyReport(item)} aria-label="Copy report">
+                            <Copy className="w-4 h-4" />
+                            <span className="sr-only">Copy</span>
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handleDownloadReport(item, 'txt')} aria-label="Download report">
+                            <Download className="w-4 h-4" />
+                            <span className="sr-only">Download</span>
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handleShareReport(item)} aria-label="Share report">
+                            <Share2 className="w-4 h-4" />
+                            <span className="sr-only">Share</span>
+                          </Button>
+                        </div>
+                      </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="prose prose-emerald max-w-none">
