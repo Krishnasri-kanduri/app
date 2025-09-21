@@ -284,7 +284,7 @@ function App() {
         // Suppress console error noise in offline mode
         setReports([]);
       } else {
-        console.error("Failed to fetch reports:", error);
+        console.error("Failed to fetch reports:", formatAxiosError(error));
       }
     }
   };
