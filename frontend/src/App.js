@@ -468,16 +468,52 @@ function App() {
   const handleShareReport = async (item) => {
     const { text } = buildReportExport(item);
     const title = item.question?.question || 'Research Report';
+
+    // 1) Native share if available
     try {
       if (navigator.share) {
         await navigator.share({ title, text });
+        toast.success('Share sheet opened');
         return;
       }
-    } catch (_) {}
-    // Fallback to copy
+    } catch (e) {
+      // proceed to clipboard fallback
+    }
+
+    // 2) Modern clipboard API
     try {
       await navigator.clipboard.writeText(`${title}\n\n${text}`);
-      toast.success('Share not available: copied to clipboard');
+      toast.success('Copied to clipboard');
+      return;
+    } catch (e) {
+      // proceed to legacy fallback
+    }
+
+    // 3) Legacy execCommand fallback (works in iframes without clipboard-write)
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = `${title}\n\n${text}`;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'absolute';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) {
+        toast.success('Copied to clipboard');
+        return;
+      }
+      throw new Error('execCommand copy failed');
+    } catch (e) {
+      // proceed to download fallback
+    }
+
+    // 4) As a last resort, download a .txt the user can share
+    try {
+      const filenameBase = sanitizeFilename(title) || 'report';
+      downloadBlob(`${title}\n\n${text}`, `${filenameBase}.txt`, 'text/plain');
+      toast.success('Downloaded .txt to share');
     } catch (e) {
       toast.error('Sharing failed');
     }
