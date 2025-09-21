@@ -396,7 +396,7 @@ function App() {
 
     } catch (error) {
       const isNetworkError = (err) => err && err.isAxiosError && !err.response;
-      console.error("Research submission failed:", error);
+      console.error("Research submission failed:", formatAxiosError(error));
 
       // Offline/local fallback flow
       if (isNetworkError(error) || String(currentUser.id).startsWith('local-')) {
